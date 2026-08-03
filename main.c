@@ -12,7 +12,6 @@
 #include "kernel.h"
 #include "CPUSECP256K1.h"
 
-const char rmdHex[] = "f6f5431d25bbf7b12e8add9af5e3475c44a0a5b8";
 time_t start_time;
 
 char *format_time(double seconds) {
@@ -26,44 +25,19 @@ char *format_time(double seconds) {
     return buffer;
 }
 
-int generate_high_entropy_bytes_getrandom(uint8_t *buffer, size_t length) {
-    if (!buffer || length == 0) return -1;
-
-    size_t fetched = 0;
-    while (fetched < length) {
-        // Memanggil syscall getrandom
-        ssize_t result = getrandom(buffer + fetched, length - fetched, 0);
-        
-        if (result < 0) {
-            // Jika terinterupsi oleh sinyal, coba lagi
-            if (errno == EINTR) continue;
-            return -1; // Gagal mengambil entropy
-        }
-        
-        fetched += result;
-    }
-
+int generate_random(uint8_t *buffer, size_t length) {
+	if (!buffer || length == 0) return -1;
+	size_t fetched = 0;
+	while (fetched < length) {
+		ssize_t result = getrandom(buffer + fetched, length - fetched, 0);
+		if (result < 0) {
+			if (errno == EINTR) continue;
+			return -1;
+		}
+		fetched += result;
+	}
     return 0;
 }
-
-int generate_high_entropy_bytes_rdseed_old(uint8_t *buffer) {
-    if (!buffer) return -1;
-
-    uint64_t rnd;
-    if (!_rdseed64_step((unsigned long long *)&rnd)) return -1;
-
-    buffer[0] = (rnd >> 0) & 0xFF;    // LSB
-    buffer[1] = (rnd >> 8) & 0xFF;
-    buffer[2] = (rnd >> 16) & 0xFF;
-    buffer[3] = (rnd >> 24) & 0xFF;
-    buffer[4] = (rnd >> 32) & 0xFF;
-    buffer[5] = (rnd >> 40) & 0xFF;
-    buffer[6] = (rnd >> 48) & 0xFF;
-    buffer[7] = (rnd >> 56) & 0xFF;   // MSB
-
-    return 0;
-}
-
 
 int hexchr2bin(const char hex, char *out) {
     if (!out) return 0;
@@ -102,19 +76,26 @@ int main() {
 	printf("\r%s\033[K\n", "================================================");
     fflush(stdout);
 
-    unsigned char GR[8];
+    unsigned char GR[4];
     D_Int pvk = {0};
     D_Point pbk;
     D_Result res;
     bool keyFound = false;
 
     while (!keyFound) {
-        while (generate_high_entropy_bytes_getrandom(GR, 8) != 0);
+		#ifdef TEST
+			GR[0] = 0x1d;
+			GR[1] = 0x83;
+			GR[2] = 0x27;
+			GR[3] = 0x5f;
+		#else
+			while (generate_random(GR, 4) != 0);
+		#endif
 
-        pvk.uc[4] = GR[4];
-        pvk.uc[5] = GR[5];
-        pvk.uc[6] = GR[6];
-        pvk.uc[7] = GR[7];
+        pvk.uc[4] = GR[3];
+        pvk.uc[5] = GR[2];
+        pvk.uc[6] = GR[1];
+        pvk.uc[7] = GR[0];
 
         for (uint8_t lprefix = MINPREFIX; lprefix <= MAXPREFIX; lprefix++) {
             if (keyFound) break;

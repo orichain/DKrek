@@ -15,8 +15,20 @@ extern "C" {
 #define SIZET					KEYTOFINDCOUNT/GROUPCOUNT
 #define	RANDOMBYTE				4
 #define MINUSPRINTING			0
-#define MINPREFIX				0x40
-#define MAXPREFIX				0x7f
+
+#define TEST
+#undef  TEST
+
+#ifdef TEST
+	#define MINPREFIX			0x10
+	#define MAXPREFIX			0x1f
+	const char rmdHex[] = 		"61eb8a50c86b0584bb727dd65bed8d2400d6d5aa";
+#else
+	#define MINPREFIX			0x40
+	#define MAXPREFIX			0x7f
+	const char rmdHex[] = 		"f6f5431d25bbf7b12e8add9af5e3475c44a0a5b8";
+#endif
+
 #define MSK62					0x3FFFFFFFFFFFFFFF
 
 typedef union {
