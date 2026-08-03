@@ -5,6 +5,8 @@
 #include <time.h>
 #include <stdbool.h>
 #include <immintrin.h>
+#include <sys/random.h>
+#include <errno.h>
 
 #include <cuda_runtime.h>
 #include "kernel.h"
@@ -24,7 +26,27 @@ char *format_time(double seconds) {
     return buffer;
 }
 
-int generate_high_entropy_bytes_rdseed(uint8_t *buffer) {
+int generate_high_entropy_bytes_getrandom(uint8_t *buffer, size_t length) {
+    if (!buffer || length == 0) return -1;
+
+    size_t fetched = 0;
+    while (fetched < length) {
+        // Memanggil syscall getrandom
+        ssize_t result = getrandom(buffer + fetched, length - fetched, 0);
+        
+        if (result < 0) {
+            // Jika terinterupsi oleh sinyal, coba lagi
+            if (errno == EINTR) continue;
+            return -1; // Gagal mengambil entropy
+        }
+        
+        fetched += result;
+    }
+
+    return 0;
+}
+
+int generate_high_entropy_bytes_rdseed_old(uint8_t *buffer) {
     if (!buffer) return -1;
 
     uint64_t rnd;
@@ -87,7 +109,7 @@ int main() {
     bool keyFound = false;
 
     while (!keyFound) {
-        while (generate_high_entropy_bytes_rdseed(GR) != 0);
+        while (generate_high_entropy_bytes_getrandom(GR, 8) != 0);
 
         pvk.uc[4] = GR[4];
         pvk.uc[5] = GR[5];
