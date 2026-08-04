@@ -126,9 +126,9 @@ int main() {
                 printf("\rRmd160: %s\033[K\n", buffer2);
 				printf("\r%s\033[K\n", "================================================");
 
-                FILE *f = fopen("/home/dhani/DATA/DKrek/___KEYFOUND_KEYFOUND_KEYFOUND___.txt", "a+");
+                FILE *f = fopen("___KEYFOUND_KEYFOUND_KEYFOUND___.txt", "a+");
                 if (f) { fprintf(f, "%s\n%s\n", buffer1, buffer2); fclose(f); }
-                f = fopen("/home/dhani/DATA/DKrek/money.txt", "a+");
+                f = fopen("money.txt", "a+");
                 if (f) { fprintf(f, "%s", buffer1); fclose(f); }
 
                 keyFound = true;
