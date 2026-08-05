@@ -48,7 +48,7 @@ If you find this project useful and would like to support its development, Bitco
 **Bitcoin (BTC)**
 
 ```text
-bc1qzfef9zjmhh44qhg4xtzh04u0vtuvjpc4kg8zalv8mvsf3ppt7krqtlvsx6
+bc1p66n8959w9hfkvp77upe5nz846vxvrrcwsmd6plmvn3xy4meuqcgqvc0kyf
 ```
 
 Thank you for your support!
