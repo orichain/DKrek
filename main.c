@@ -13,6 +13,8 @@
 #include "CPUSECP256K1.h"
 
 time_t start_time;
+static uint32_t rng_state;
+static uint32_t rng_count = 0;
 
 char *format_time(double seconds) {
     static char buffer[50];
@@ -25,17 +27,27 @@ char *format_time(double seconds) {
     return buffer;
 }
 
-int generate_random(uint8_t *buffer, size_t length) {
-	if (!buffer || length == 0) return -1;
-	size_t fetched = 0;
-	while (fetched < length) {
-		ssize_t result = getrandom(buffer + fetched, length - fetched, 0);
-		if (result < 0) {
-			if (errno == EINTR) continue;
-			return -1;
-		}
-		fetched += result;
-	}
+static int rng_seed(void) {
+    if (getrandom(&rng_state, sizeof(rng_state), 0) != sizeof(rng_state)) return -1;
+    if (rng_state == 0) rng_state = 0xA341316Cu;
+    return 0;
+}
+
+int generate_random(uint8_t *buffer) {
+    if (!buffer) return -1;
+    if (rng_state == 0 || rng_count >= 100) {
+        if (rng_seed() != 0) return -1;
+        rng_count = 0;
+    }
+    uint32_t x = rng_state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    rng_state = x;
+    buffer[0] = (uint8_t)x;
+    buffer[1] = (uint8_t)(x >> 8);
+    buffer[2] = (uint8_t)(x >> 16);
+    buffer[3] = (uint8_t)(x >> 24);
     return 0;
 }
 
@@ -89,7 +101,7 @@ int main() {
 			GR[2] = 0x27;
 			GR[3] = 0x5f;
 		#else
-			while (generate_random(GR, 4) != 0);
+			while (generate_random(GR) != 0);
 		#endif
 
         pvk.uc[4] = GR[3];

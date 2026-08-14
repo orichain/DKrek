@@ -40,6 +40,7 @@ __device__ static void __noinline__ _ReduceAndRmdAndCompare(
 		_ModMulK1(&Y,&_s);
 		_ModSub(&Y,&((GTableAdds[yloop-1]).Y));
         _GetHash160Comp(X.bitsu64, ((Y.bitsu32[0] & 1) == 1), tmpRmd);
+        //tmpRmd[19]=0x01;
         if (IsSameD_Rmd(tmpRmd, (*S))) {
 			(*indexKeyFound) = yloop;
 			SetD_Rmd((*rmd160), tmpRmd);
@@ -60,11 +61,13 @@ __device__ static void __noinline__ _ReduceAndRmdAndCompare(
 		_ModMulK1(&Y,&_s);
 		_ModSub(&Y,&((GTableAdds[0]).Y));
 		_GetHash160Comp(X.bitsu64, ((Y.bitsu32[0] & 1) == 1), tmpRmd);
+		//tmpRmd[19]=0x01;
 		if (IsSameD_Rmd(tmpRmd, (*S))) {
 			(*indexKeyFound) = 1;
 			SetD_Rmd((*rmd160), tmpRmd);
 		} else {
 			_GetHash160Comp(((*publicKey).X).bitsu64, ((((*publicKey).Y).bitsu32[0] & 1) == 1), tmpRmd);
+			//tmpRmd[19]=0x01;
 			if (IsSameD_Rmd(tmpRmd, (*S))) {
 				(*indexKeyFound) = 0;
 				SetD_Rmd((*rmd160), tmpRmd);
@@ -139,7 +142,7 @@ void _Launch_DKrek_Kernel(
 	cudaMemcpy(dvc_privateKeyStart, privateKeyStart, sizeof(D_Int), cudaMemcpyHostToDevice);
 	cudaMemcpy(dvc_publicKeyStart, publicKeyStart, sizeof(D_Point), cudaMemcpyHostToDevice);
 	cudaMemcpy(dvc_rmd160ToFind, rmd160ToFind, sizeof(D_HashRmd), cudaMemcpyHostToDevice);
-	uint64_t blockSize = 512;
+	uint64_t blockSize = 256;
 	uint64_t numBlocks = (size + blockSize - 1) / blockSize;
 	_DKrek_Kernel<<<numBlocks, blockSize>>>(
 		dvc_privateKeyStart,
