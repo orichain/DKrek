@@ -13,8 +13,6 @@
 #include "CPUSECP256K1.h"
 
 time_t start_time;
-static uint32_t rng_state;
-static uint32_t rng_count = 0;
 
 char *format_time(double seconds) {
     static char buffer[50];
@@ -27,27 +25,63 @@ char *format_time(double seconds) {
     return buffer;
 }
 
-static int rng_seed(void) {
-    if (getrandom(&rng_state, sizeof(rng_state), 0) != sizeof(rng_state)) return -1;
-    if (rng_state == 0) rng_state = 0xA341316Cu;
-    return 0;
+inline static void m_seedRand(MTRand* rand, uint32_t seed) {
+	/* set initial seeds to mt[STATE_VECTOR_LENGTH] using the generator
+	* from Line 25 of Table 1 in: Donald Knuth, "The Art of Computer
+	* Programming," Vol. 2 (2nd Ed.) pp.102.
+	*/
+	rand->mt[0] = seed & 0xffffffff;
+	for(rand->index=1; rand->index<STATE_VECTOR_LENGTH; rand->index++) {
+		rand->mt[rand->index] = (6069 * rand->mt[rand->index-1]) & 0xffffffff;
+	}
 }
 
-int generate_random(uint8_t *buffer) {
+/**
+ * Generates a pseudo-randomly generated long.
+ */
+uint32_t genRandLong(MTRand* rand) {
+	uint32_t y;
+	static uint32_t mag[2] = {0x0, 0x9908b0df}; /* mag[x] = x * 0x9908b0df for x = 0,1 */
+	if(rand->index >= STATE_VECTOR_LENGTH || rand->index < 0) {
+		/* generate STATE_VECTOR_LENGTH words at a time */
+		int32_t kk;
+		if(rand->index >= STATE_VECTOR_LENGTH+1 || rand->index < 0) {
+			m_seedRand(rand, 4357);
+		}
+		for(kk=0; kk<STATE_VECTOR_LENGTH-STATE_VECTOR_M; kk++) {
+			y = (rand->mt[kk] & UPPER_MASK) | (rand->mt[kk+1] & LOWER_MASK);
+			rand->mt[kk] = rand->mt[kk+STATE_VECTOR_M] ^ (y >> 1) ^ mag[y & 0x1];
+		}
+		for(; kk<STATE_VECTOR_LENGTH-1; kk++) {
+			y = (rand->mt[kk] & UPPER_MASK) | (rand->mt[kk+1] & LOWER_MASK);
+			rand->mt[kk] = rand->mt[kk+(STATE_VECTOR_M-STATE_VECTOR_LENGTH)] ^ (y >> 1) ^ mag[y & 0x1];
+		}
+		y = (rand->mt[STATE_VECTOR_LENGTH-1] & UPPER_MASK) | (rand->mt[0] & LOWER_MASK);
+		rand->mt[STATE_VECTOR_LENGTH-1] = rand->mt[STATE_VECTOR_M-1] ^ (y >> 1) ^ mag[y & 0x1];
+		rand->index = 0;
+	}
+	y = rand->mt[rand->index++];
+	y ^= (y >> 11);
+	y ^= (y << 7) & TEMPERING_MASK_B;
+	y ^= (y << 15) & TEMPERING_MASK_C;
+	y ^= (y >> 18);
+	return y;
+}
+
+int generate_random(MTRand *r, uint8_t *buffer) {
+	if (!r) return -1;
     if (!buffer) return -1;
-    if (rng_state == 0 || rng_count >= 100) {
-        if (rng_seed() != 0) return -1;
-        rng_count = 0;
-    }
-    uint32_t x = rng_state;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    rng_state = x;
-    buffer[0] = (uint8_t)x;
-    buffer[1] = (uint8_t)(x >> 8);
-    buffer[2] = (uint8_t)(x >> 16);
-    buffer[3] = (uint8_t)(x >> 24);
+    if (r->seeded == 0x00 || r->rng_count >= 100) {
+		uint32_t seed;
+		if (getrandom(&seed, sizeof(seed), 0) != sizeof(seed)) return -1;
+		m_seedRand(r, seed);
+		r->seeded = 0x01;
+		r->rng_count = 0;
+	}
+	uint32_t rnd = genRandLong(r);
+	uint32_t rnd_be32 = htobe32(rnd);
+	memcpy(buffer, &rnd_be32, sizeof(uint32_t));
+	r->rng_count++;
     return 0;
 }
 
@@ -75,6 +109,10 @@ int hexs2bin(const char *hex, unsigned char *out) {
 
 int main() {
     D_HashRmd rmd;
+    MTRand r;
+    r.seeded = 0x00;
+    r.rng_count = 0;
+    
     hexs2bin(rmdHex, rmd);
     start_time = time(NULL);
 	
@@ -82,7 +120,8 @@ int main() {
 	printf("\rRmd160: %s\033[K\n", rmdHex);
 	printf("\r%s\033[K\n", "==============.....SEARCHING......==============");
     printf("\rElapsed: %s\033[K\n", "");
-	printf("\rKecepatan: %.2f Key/s\033[K\n", (double)0);
+	printf("\rSpeed: %.2f Key/s\033[K\n", (double)0);
+	printf("\rRng Cnt: %d\033[K\n", r.rng_count);
 	printf("\rPrivateKey: %s\033[K\n", "");
 	printf("\rRmd160: %s\033[K\n", "");
 	printf("\r%s\033[K\n", "================================================");
@@ -101,7 +140,7 @@ int main() {
 			GR[2] = 0x27;
 			GR[3] = 0x5f;
 		#else
-			while (generate_random(GR) != 0);
+			while (generate_random(&r, GR) != 0);
 		#endif
 
         pvk.uc[4] = GR[3];
@@ -127,13 +166,14 @@ int main() {
             for (int i = 0; i < 9; i++) sprintf(&buffer1[i*2], "%.2x", res.privateKey.uc[8 - i]);
             for (int i = 0; i < 20; i++) sprintf(&buffer2[i*2], "%.2x", res.rmd160[i]);
 
-            printf("\033[8A");
+            printf("\033[9A");
             if (res.keyFound) {
                 printf("\r%s\033[K\n", "==============.....--FOUND--......==============");
                 printf("\rRmd160: %s\033[K\n", rmdHex);
                 printf("\r%s\033[K\n", "==============.....--FOUND--......==============");
                 printf("\rElapsed: %s\033[K\n", format_time(elapsed));
-                printf("\rKecepatan: %.2f Key/s\033[K\n", KEYTOFINDCOUNT/time_taken);
+                printf("\rSpeed: %.2f Key/s\033[K\n", KEYTOFINDCOUNT/time_taken);
+                printf("\rRng Cnt: %d\033[K\n", r.rng_count);
                 printf("\rPrivateKey: %s\033[K\n", buffer1);
                 printf("\rRmd160: %s\033[K\n", buffer2);
 				printf("\r%s\033[K\n", "================================================");
@@ -150,7 +190,8 @@ int main() {
                 printf("\rRmd160: %s\033[K\n", rmdHex);
                 printf("\r%s\033[K\n", "==============.....SEARCHING......==============");
                 printf("\rElapsed: %s\033[K\n", format_time(elapsed));
-                printf("\rKecepatan: %.2f Key/s\033[K\n", KEYTOFINDCOUNT/time_taken);
+                printf("\rSpeed: %.2f Key/s\033[K\n", KEYTOFINDCOUNT/time_taken);
+                printf("\rRng Cnt: %d\033[K\n", r.rng_count);
                 printf("\rPrivateKey: %s\033[K\n", buffer1);
                 printf("\rRmd160: %s\033[K\n", buffer2);
 				printf("\r%s\033[K\n", "================================================");

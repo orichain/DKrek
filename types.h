@@ -7,10 +7,25 @@
 extern "C" {
 #endif
 
+#define STATE_VECTOR_LENGTH		624
+#define STATE_VECTOR_M			397 /* changes to STATE_VECTOR_LENGTH also require changes to this */
+
+typedef struct tagMTRand {
+	uint32_t 					mt[STATE_VECTOR_LENGTH];
+	int32_t						index;
+	uint8_t						seeded;
+	uint32_t					rng_count;
+} MTRand;
+
+#define UPPER_MASK				0x80000000
+#define LOWER_MASK				0x7fffffff
+#define TEMPERING_MASK_B		0x9d2c5680
+#define TEMPERING_MASK_C		0xefc60000
+
 #define NB64BLOCK				5
 #define KEYBYTESCOUNT			9
 
-#define KEYTOFINDCOUNT			4294967296
+#define KEYTOFINDCOUNT   		4294967296
 #define GROUPCOUNT				2048
 #define SIZET					KEYTOFINDCOUNT/GROUPCOUNT
 #define	RANDOMBYTE				4
