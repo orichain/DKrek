@@ -15,12 +15,15 @@ typedef struct tagMTRand {
 	int32_t						index;
 	uint8_t						seeded;
 	uint32_t					rng_count;
+	uint32_t					seed;
 } MTRand;
 
 #define UPPER_MASK				0x80000000
 #define LOWER_MASK				0x7fffffff
 #define TEMPERING_MASK_B		0x9d2c5680
 #define TEMPERING_MASK_C		0xefc60000
+
+#define RESEEDCNT				100
 
 #define NB64BLOCK				5
 #define KEYBYTESCOUNT			9
@@ -38,10 +41,12 @@ typedef struct tagMTRand {
 	#define MINPREFIX			0x10
 	#define MAXPREFIX			0x1f
 	const char rmdHex[] = 		"61eb8a50c86b0584bb727dd65bed8d2400d6d5aa";
+	const char dbName[] = 		"database/dbtest.db";
 #else
 	#define MINPREFIX			0x40
 	#define MAXPREFIX			0x7f
 	const char rmdHex[] = 		"f6f5431d25bbf7b12e8add9af5e3475c44a0a5b8";
+	const char dbName[] = 		"database/db71.db";
 #endif
 
 #define MSK62					0x3FFFFFFFFFFFFFFF

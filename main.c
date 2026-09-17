@@ -7,12 +7,101 @@
 #include <immintrin.h>
 #include <sys/random.h>
 #include <errno.h>
+#include <sqlite3.h>
 
 #include <cuda_runtime.h>
 #include "kernel.h"
 #include "CPUSECP256K1.h"
 
-time_t start_time;
+int seeds_open(sqlite3 **db, const char *filename) {
+    int rc;
+    rc = sqlite3_open(filename, db);
+    if (rc != SQLITE_OK) {
+        if (*db) {
+            sqlite3_close(*db);
+            *db = NULL;
+        }
+        return rc;
+    }
+    rc = sqlite3_exec(*db, "CREATE TABLE IF NOT EXISTS seeds (seed INTEGER NOT NULL PRIMARY KEY, cnt INTEGER NOT NULL, islast INTEGER NOT NULL CHECK (islast IN (0, 1)));", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+        sqlite3_close(*db);
+        *db = NULL;
+        return rc;
+    }
+    return SQLITE_OK;
+}
+
+
+void seeds_close(sqlite3 *db) {
+    if (db) sqlite3_close(db);
+}
+
+int seeds_append(sqlite3 *db, uint32_t seed, uint32_t cnt) {
+    int rc;
+    rc = sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) return rc;
+    rc = sqlite3_exec(db, "UPDATE seeds SET islast = 0;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto rollback;
+    sqlite3_stmt *stmt;
+    rc = sqlite3_prepare_v2(db, "INSERT INTO seeds (seed, cnt, islast) VALUES (?, ?, 1);", -1, &stmt, NULL);
+    if (rc != SQLITE_OK) goto rollback;
+    sqlite3_bind_int64(stmt, 1, (sqlite3_int64)seed);
+    sqlite3_bind_int64(stmt, 2, (sqlite3_int64)cnt);
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) goto rollback;
+    return sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+rollback:
+    sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL);
+    return rc;
+}
+
+
+int seeds_update_cnt(sqlite3 *db, uint32_t seed, uint32_t cnt) {
+    sqlite3_stmt *stmt;
+    int rc;
+    rc = sqlite3_prepare_v2(db, "UPDATE seeds SET cnt = ? WHERE seed = ?;", -1, &stmt, NULL);
+    if (rc != SQLITE_OK) return rc;
+    sqlite3_bind_int64(stmt, 1, (sqlite3_int64)cnt);
+    sqlite3_bind_int64(stmt, 2, (sqlite3_int64)seed);
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? SQLITE_OK : rc;
+}
+
+
+int seeds_get_last(sqlite3 *db, uint32_t *seed, uint32_t *cnt) {
+    sqlite3_stmt *stmt;
+    int rc;
+    rc = sqlite3_prepare_v2(db, "SELECT seed, cnt FROM seeds WHERE islast = 1 LIMIT 1;", -1, &stmt, NULL);
+    if (rc != SQLITE_OK) return rc;
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        *seed = (uint32_t)sqlite3_column_int64(stmt, 0);
+        *cnt  = (uint32_t)sqlite3_column_int64(stmt, 1);
+        sqlite3_finalize(stmt);
+        return SQLITE_OK;
+    }
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? SQLITE_NOTFOUND : rc;
+}
+
+int seeds_get_cnt(sqlite3 *db, uint32_t seed, uint32_t *cnt) {
+    sqlite3_stmt *stmt;
+    int rc;
+    rc = sqlite3_prepare_v2(db, "SELECT cnt FROM seeds WHERE seed = ? LIMIT 1;", -1, &stmt, NULL);
+    if (rc != SQLITE_OK) return rc;
+    sqlite3_bind_int64(stmt, 1, (sqlite3_int64)seed);
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        *cnt = (uint32_t)sqlite3_column_int64(stmt, 0);
+        sqlite3_finalize(stmt);
+        return SQLITE_OK;
+    }
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? SQLITE_NOTFOUND : rc;
+}
 
 char *format_time(double seconds) {
     static char buffer[50];
@@ -68,15 +157,46 @@ uint32_t genRandLong(MTRand* rand) {
 	return y;
 }
 
-int generate_random(MTRand *r, uint8_t *buffer) {
+int new_seed(sqlite3 *db, MTRand *r) {
+	uint32_t seed;
+	uint32_t cnt = 0;
+	int rc = SQLITE_OK;
+	do {
+		if (!_rdseed32_step(&seed)) return -1;
+		rc = seeds_get_cnt(db, seed, &cnt);
+	} while (rc == SQLITE_OK);
+	m_seedRand(r, seed);
+	r->seeded = 0x01;
+	r->rng_count = 0;
+	r->seed = seed;
+	seeds_append(db, seed, 0);
+	return 0;
+}
+
+int generate_random(sqlite3 *db, MTRand *r, uint8_t *buffer) {
 	if (!r) return -1;
     if (!buffer) return -1;
-    if (r->seeded == 0x00 || r->rng_count >= 100) {
-		uint32_t seed;
-		if (getrandom(&seed, sizeof(seed), 0) != sizeof(seed)) return -1;
-		m_seedRand(r, seed);
-		r->seeded = 0x01;
-		r->rng_count = 0;
+    if (r->seeded == 0x00) {
+		uint32_t cseed = 0;
+		uint32_t ccnt = 0;
+		int rc = seeds_get_last(db, &cseed, &ccnt);
+		if (rc == SQLITE_OK) {
+			if (ccnt >= RESEEDCNT) {
+				if (new_seed(db, r) == -1) return -1;
+			} else {
+				m_seedRand(r, cseed);
+				r->seeded = 0x01;
+				r->seed = cseed;
+				r->rng_count = ccnt;
+				for (uint32_t iloop=0;iloop<ccnt;iloop++) genRandLong(r);
+			}
+		} else if (rc == SQLITE_NOTFOUND) {
+			if (new_seed(db, r) == -1) return -1;
+		}
+	} else {
+		if (r->rng_count >= RESEEDCNT) {
+			if (new_seed(db, r) == -1) return -1;
+		}
 	}
 	uint32_t rnd = genRandLong(r);
 	uint32_t rnd_be32 = htobe32(rnd);
@@ -108,6 +228,13 @@ int hexs2bin(const char *hex, unsigned char *out) {
 }
 
 int main() {
+	sqlite3 *db;
+	if (seeds_open(&db, dbName) != SQLITE_OK) {
+		printf("Failed to open database\n");
+		return 1;
+	}
+	
+	time_t start_time;
     D_HashRmd rmd;
     MTRand r;
     r.seeded = 0x00;
@@ -140,7 +267,7 @@ int main() {
 			GR[2] = 0x27;
 			GR[3] = 0x5f;
 		#else
-			while (generate_random(&r, GR) != 0);
+			while (generate_random(db, &r, GR) != 0);
 		#endif
 
         pvk.uc[4] = GR[3];
@@ -198,7 +325,10 @@ int main() {
             }
             fflush(stdout);
         }
+        seeds_update_cnt(db, r.seed, r.rng_count);
     }
+    
+    seeds_close(db);
 
     return 0;
 }
