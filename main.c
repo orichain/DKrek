@@ -12,6 +12,8 @@
 #include <cuda_runtime.h>
 #include "kernel.h"
 #include "CPUSECP256K1.h"
+#include "sha256.h"
+#include "base58.h"
 
 int seeds_open(sqlite3 **db, const char *filename) {
     int rc;
@@ -227,6 +229,58 @@ int hexs2bin(const char *hex, unsigned char *out) {
     return len;
 }
 
+static bool b58_sha256(
+    void *out,
+    const void *data,
+    size_t len)
+{
+    sha256(
+        (uint8_t *)data,
+        len,
+        (uint8_t *)out
+    );
+
+    return true;
+}
+
+
+bool privatekey_to_wif(
+    char *wif,
+    size_t *wif_sz,
+    const uint8_t privatekey[32],
+    bool compressed)
+{
+    uint8_t data[33];
+    size_t datasz;
+
+    /*
+     * Private key = 32 byte
+     */
+    memcpy(data, privatekey, 32);
+
+    /*
+     * Compressed WIF:
+     * append 0x01
+     */
+    if (compressed) {
+        data[32] = 0x01;
+        datasz = 33;
+    } else {
+        datasz = 32;
+    }
+
+    /*
+     * Bitcoin mainnet WIF version
+     */
+    return b58check_enc(
+        wif,
+        wif_sz,
+        0x80,
+        data,
+        datasz
+    );
+}
+
 int main() {
 	sqlite3 *db;
 	if (seeds_open(&db, dbName) != SQLITE_OK) {
@@ -237,6 +291,7 @@ int main() {
 	time_t start_time;
     D_HashRmd rmd;
     MTRand r;
+    r.seed = 0;
     r.seeded = 0x00;
     r.rng_count = 0;
     
@@ -292,7 +347,6 @@ int main() {
             char buffer1[19] = {0}, buffer2[41] = {0};
             for (int i = 0; i < 9; i++) sprintf(&buffer1[i*2], "%.2x", res.privateKey.uc[8 - i]);
             for (int i = 0; i < 20; i++) sprintf(&buffer2[i*2], "%.2x", res.rmd160[i]);
-
             printf("\033[9A");
             if (res.keyFound) {
                 printf("\r%s\033[K\n", "==============.....--FOUND--......==============");
@@ -305,10 +359,21 @@ int main() {
                 printf("\rRmd160: %s\033[K\n", buffer2);
 				printf("\r%s\033[K\n", "================================================");
 
-                FILE *f = fopen("___KEYFOUND_KEYFOUND_KEYFOUND___.txt", "a+");
+                FILE *f = fopen("money.txt", "a+");
                 if (f) { fprintf(f, "%s\n%s\n", buffer1, buffer2); fclose(f); }
-                f = fopen("money.txt", "a+");
-                if (f) { fprintf(f, "%s", buffer1); fclose(f); }
+                
+                uint8_t cprivatekey[32];
+                for (int i = 0 ; i < 32 ; i++) {
+                    cprivatekey[i] = res.privateKey.uc[31 - i];
+                }
+                char wif[64];
+                size_t wif_sz = sizeof(wif) - 1;
+                b58_sha256_impl = b58_sha256;
+                privatekey_to_wif(wif, &wif_sz, cprivatekey, true);
+                wif[wif_sz] = '\0';
+                
+                f = fopen("money_wif.txt", "a+");
+                if (f) { fprintf(f, "%s\n", wif); fclose(f); }
 
                 keyFound = true;
                 break;
