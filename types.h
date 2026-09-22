@@ -7,21 +7,11 @@
 extern "C" {
 #endif
 
-#define STATE_VECTOR_LENGTH		624
-#define STATE_VECTOR_M			397 /* changes to STATE_VECTOR_LENGTH also require changes to this */
-
-typedef struct tagMTRand {
-	uint32_t 					mt[STATE_VECTOR_LENGTH];
-	int32_t						index;
+typedef struct {
 	uint8_t						seeded;
-	uint32_t					rng_count;
+	uint8_t					    rng_count;
 	uint32_t					seed;
-} MTRand;
-
-#define UPPER_MASK				0x80000000
-#define LOWER_MASK				0x7fffffff
-#define TEMPERING_MASK_B		0x9d2c5680
-#define TEMPERING_MASK_C		0xefc60000
+} PPRNG32;
 
 #define RESEEDCNT				100
 

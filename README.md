@@ -32,10 +32,11 @@ gmake clean all
 ==============.....SEARCHING......==============
 Rmd160: f6f5431d25bbf7b12e8add9af5e3475c44a0a5b8
 ==============.....SEARCHING......==============
-Elapsed: 21h 10m
-Kecepatan: 824709303.79 Keys/s
-PrivateKey: 7a295be40affffffff
-Rmd160: 0d643b59186a591131c7c1b27ff26b2868b37a53
+Elapsed: 24.0 s
+Speed: 907243384.10 Key/s
+Rng Cnt: 3
+PrivateKey: 44d83f9967ffffffff
+Rmd160: a3f9b683b1c0f30f0b07a9653723aa0833c4d076
 ================================================
 ```
 
