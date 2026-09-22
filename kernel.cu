@@ -142,7 +142,9 @@ void _Launch_DKrek_Kernel(
 	cudaMemcpy(dvc_privateKeyStart, privateKeyStart, sizeof(D_Int), cudaMemcpyHostToDevice);
 	cudaMemcpy(dvc_publicKeyStart, publicKeyStart, sizeof(D_Point), cudaMemcpyHostToDevice);
 	cudaMemcpy(dvc_rmd160ToFind, rmd160ToFind, sizeof(D_HashRmd), cudaMemcpyHostToDevice);
-	uint64_t blockSize = 256;
+	int minGridSize;
+	int blockSize;
+	cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, _DKrek_Kernel, 0, 0);
 	uint64_t numBlocks = (size + blockSize - 1) / blockSize;
 	_DKrek_Kernel<<<numBlocks, blockSize>>>(
 		dvc_privateKeyStart,
