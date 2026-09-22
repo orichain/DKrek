@@ -162,9 +162,6 @@ int generate_random(sqlite3 *db, PPRNG32 *r, uint8_t *buffer) {
 				r->seeded = 0x01;
 				r->seed = cseed;
 				r->rng_count = ccnt;
-				for (uint32_t iloop=0;iloop<ccnt;iloop++) {
-                    PPRNG32_rand(r, iloop);
-                }
 			}
 		} else if (rc == SQLITE_NOTFOUND) {
 			if (new_seed(db, r) == -1) return -1;
