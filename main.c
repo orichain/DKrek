@@ -136,7 +136,27 @@ int new_seed(sqlite3 *db, PPRNG32 *r) {
 	uint32_t cnt = 0;
 	int rc = SQLITE_OK;
 	do {
-		if (!_rdseed32_step(&seed)) return -1;
+        if (__builtin_cpu_supports("rdseed")) {
+            int retries = 10;
+            while (retries-- > 0 && !_rdseed32_step(&seed));
+            if (retries < 0) {
+                ssize_t ret;
+                do {
+                    ret = getrandom(&seed, sizeof(seed), 0);
+                } while (ret < 0 && errno == EINTR);
+                if (ret != sizeof(seed)) {
+                    return -1;
+                }
+            }
+        } else {
+            ssize_t ret;
+            do {
+                ret = getrandom(&seed, sizeof(seed), 0);
+            } while (ret < 0 && errno == EINTR);
+            if (ret != sizeof(seed)) {
+                return -1;
+            }
+        }
 		rc = seeds_get_cnt(db, seed, &cnt);
 	} while (rc == SQLITE_OK);
 	PPRNG32_seed(r, seed);
