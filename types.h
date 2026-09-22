@@ -29,7 +29,7 @@ typedef struct tagMTRand {
 #define KEYBYTESCOUNT			9
 
 #define KEYTOFINDCOUNT   		4294967296
-#define GROUPCOUNT				2048
+#define GROUPCOUNT				4096
 #define SIZET					KEYTOFINDCOUNT/GROUPCOUNT
 #define	RANDOMBYTE				4
 #define MINUSPRINTING			0
