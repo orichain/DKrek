@@ -43,7 +43,7 @@ Rmd160: a3f9b683b1c0f30f0b07a9653723aa0833c4d076
 
 ## Donations
 
-If you find this project useful and would like to support its development, Bitcoin donations are greatly appreciated.
+If you find this project useful and would like to support its development—specifically toward scaling into multi-host, multi-GPU architectures, and further reducing the random search space—, Bitcoin donations are greatly appreciated.
 
 **Bitcoin (BTC)**
 

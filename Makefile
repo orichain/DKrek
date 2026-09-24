@@ -26,7 +26,7 @@ sha256.o: sha256.c
 main.o: main.c
 	$(CC) $(CFLAGS) -mrdseed $(CUDA_INC) -c $< -o $@
 
-kernel.o: kernel.cu CPUSECP256K1.h GPUHash.cuh
+kernel.o: kernel.cu GPUSECP256K1.cuh GPUHash.cuh
 	$(NVCC) $(NVFLAGS) -c $< -o $@
 
 $(TARGET): $(OBJS)
