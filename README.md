@@ -11,8 +11,7 @@ Recommended environment:
   https://www.nvidia.com/en-us/drivers/
 - CUDA Toolkit installed from:
   https://developer.nvidia.com/cuda-downloads
-- GCC
-- GNU Make
+- gcc, sqlite-devel, gmake (sudo dnf install gcc make sqlite-devel)
 
 ## Build
 
