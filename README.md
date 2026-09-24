@@ -43,7 +43,7 @@ Rmd160: a3f9b683b1c0f30f0b07a9653723aa0833c4d076
 
 ## Donations
 
-If you find this project useful and would like to support its development—specifically toward scaling into multi-host, multi-GPU architectures, and further reducing the random search space—, Bitcoin donations are greatly appreciated.
+If you find this project useful and would like to support its development, focusing on scaling to multi-GPU and multi-host systems and optimizing the random search space through explicit GPU index range allocation (e.g., assigning distinct sub-ranges like 00–09 per GPU), Bitcoin donations are greatly appreciated.
 
 **Bitcoin (BTC)**
 
